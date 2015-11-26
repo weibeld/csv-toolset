@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# Remove rows with invalid "mcc", "mnc", "lac", and "cid" values
+#
+# Input dependencies:
+#   Columns "mcc", "mnc", "lac", and "cid"
+#
+# Uses: gawk
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [-o file] [file]
+
+Description:
+ Remove rows with invalid "mcc", "mnc", "lac", and "cid" values
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { w=$(which ${0##*/}) dirname ${w:-$0}; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":o:" opt; do
+  case $opt in
+    o) o=$OPTARG ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+declare -r cols=$(head -n 1 "$input" | tr , "\n")
+i() { grep -n -m 1 "$1" <<<"$cols" | cut -d : -f 1; }
+
+gawk=$(TmpFile)
+cat <<EOF >"$gawk"
+BEGIN {FPAT="([^,]*)|(\"[^\"]*\")"; OFS=","}
+NR == 1 || ( \
+\$$(i cid) >=   0 && \$$(i cid) <  2^28 && \
+\$$(i lac) >=   0 && \$$(i lac) <  2^16 && \
+\$$(i mnc) >=   0 && \$$(i mnc) <=  999 && \
+\$$(i mcc) >= 202 && \$$(i mcc) <=  748 ) \
+{print \$0}
+EOF
+
+IsUnset "$o" && gawk -f "$gawk" "$input"
+IsSet   "$o" && { t=$(TmpFile); gawk -f "$gawk" "$input" >"$t"; mv "$t" "$o"; }

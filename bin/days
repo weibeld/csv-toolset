@@ -1,0 +1,84 @@
+#!/bin/bash
+#
+# Split a CSV file by days
+#
+# Input dependencies:
+#   Column "date"
+#
+# Uses: R
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [-d dir] [-p prefix] [-o file] [file]
+
+Description:
+ Split a CSV file into days. Input must have column "date". With -d, CSV files
+ with separate days are written to directory 'dir'. Without -d, days are sepa-
+ rated by an empty line written to stdout. If -d is set, -o is ignored.
+
+Options:
+ -d Output directory (will be created)
+ -p Filename prefix (has only an effect if -d is also set)
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":d:p:o:" opt; do
+  case $opt in
+    d) d=${OPTARG%/} ;;
+    p) p=$OPTARG     ;;
+    o) o=$OPTARG     ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+head -n 1 "$input" | grep -q ",date," || Abort 'missing "date" column in input CSV'
+
+# Insert empty lines between days in output
+if IsUnset "$d"; then
+  r=$(TmpFile); rout=$(TmpFile)
+  cat <<EOF >"$r"
+  d <- ReadCSV("$input")
+  first <- TRUE
+  for (day in levels(as.factor(d\$date))) {
+    if (first == TRUE) {
+      WriteCSV(d[d\$date == day,], file="$rout")
+      first <- FALSE
+    }
+    else {
+      cat("\n", file="$rout", append=TRUE)
+      WriteCSV(d[d\$date == day,], file="$rout", col.names=FALSE, append=TRUE)
+    }
+  }
+EOF
+  MyRscript "$r"
+  IsUnset "$o" && cat "$rout"
+  IsSet   "$o" && cat "$rout" >"$o"
+# Write lines of each day to a separate CSV file
+else
+  mkdir -p "$d"
+  r=$(TmpFile)
+  cat <<EOF >"$r"
+  d <- ReadCSV("$input")
+  for (day in levels(as.factor(d\$date))) {
+    WriteCSV(d[d\$date == day,], file=paste0("$d", "/", "$p", day , ".csv"))
+  }
+EOF
+  MyRscript "$r"
+fi

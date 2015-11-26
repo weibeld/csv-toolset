@@ -1,0 +1,74 @@
+#!/bin/bash
+#
+# Generate KML file showing cell locations
+#
+# Input dependencies:
+#   Columns "mcc", "mnc", "lac", "cid", "lat", "lon"
+#
+# Uses: R
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+i=star  # Default icon
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [-i icon] [-n name] [-d description] [-s snippet] [file]
+
+Description:
+ Create KML file with point placemarks from values in "lat" and "lon" columns
+
+Options:
+ -i Icon for placemarks, one of: (default is '$i')
+      star, tick, cross, question, black, blue, cyan, green, orange, purple,
+      red, white, yellow
+ -n Optional name for KML document
+ -d Optional description for KML document
+ -s Optional snippet for KML document
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":i:n:d:s:" opt; do
+  case $opt in
+    i) i=$OPTARG ;;
+    n) n=$OPTARG ;;
+    d) d=$OPTARG ;;
+    s) s=$OPTARG ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+head -n 1 "$input" | grep -q "lat" || Abort 'missing "lat" and "lon" columns in input CSV'
+head -n 1 "$input" | grep -q "lon" || Abort 'missing "lat" and "lon" columns in input CSV'
+
+r=$(TmpFile); rout=$(TmpFile)
+cat <<'EOF' >"$r"
+args  <- commandArgs(trailingOnly=TRUE)
+d     <- ReadCSV(args[1])
+coord <- paste0(d$lat, ",", d$lon)
+# If the value of an argument is NULL, no table row will be added
+descr <- HTMLTable(MCC=d$mcc, MNC=d$mnc, LAC=d$lac, CID=d$cid,
+  Operator=d$operator, `NW (Ping)`=d$nwType, `NW (OCID)`=d$radio,
+  Recordings=d$records, `OCID samples`=d$samples, Coordinates=coord, width=250)
+name  <- paste0(d$mcc, "-", d$mnc, "-", d$lac, "-", d$cid)
+LocToKML(d, file=args[2], icon=Icon(args[3]), descr=descr, name=name,
+  doc.name=args[4], doc.descr=args[5], doc.snippet=args[6])
+EOF
+
+MyRscript "$r" "$input" "$rout" "$i" "$n" "$d" "$s"
+cat "$rout"

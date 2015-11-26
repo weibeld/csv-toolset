@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# Number of rows of CSV file. Excludes the header line, blank lines, and
+# comment lines.
+#
+# Input dependencies:
+#   Any CSV file
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+# set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [-b] [file ...]
+
+Description:
+ Number of rows of a CSV file. Multiple input files may be specified.
+
+Options:
+ -b Use plain number format, e.g. 21473 instead of 21,473
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":b" opt; do
+  case $opt in
+    b)  b=true ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+[[ $# -eq 0 ]] && input=$(TmpFile) && cat - >"$input" && CheckInput "$input"
+[[ $# -gt 0 ]] && input=("$@")
+
+for i in "${input[@]}"; do
+  nr=$(($(cat "$i" | rm_blank | rm_comment | b | wc -l)))
+  if IsSet "$b"; then echo "$nr"
+                 else IsMac && LC_ALL=en_US; printf "%'d\n" "$nr"
+  fi  
+done

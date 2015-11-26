@@ -1,0 +1,118 @@
+#!/bin/bash
+#
+# Download Ping (v2) data files. Uses the web interface to Ping v2 data on
+# http://trainutri.unige.ch/mQoL/v2/download/scripts/getData.php.
+#
+# Uses: curl
+#
+# Daniel Weibel <daniel.weibel@unige.ch>, Feb.-Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} -i imei -f file -t timespan [-s]
+
+Description:
+ Download Ping v2 data files. If multiple files are downloaded and printed to
+ stdout, then a header is printed only for the first file.
+
+Options:
+ -i IMEI, may be repeated
+ -f File type, may be repeated
+ -t Timespan, format YYYY-MM-DD_YYY-MM-DD, may be repeated
+ -s Save downloaded file(s) in current dir (default is to print to stdout)
+
+Example:
+ Download and save CellIdsService and PingService file of a specific IMEI:
+   ${0##*/} -s -i \$(peek -I 22) -f CellIdsService -f PingService \\
+       -t 2015-03-01_2015-03-31
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":i:f:t:s" opt; do
+  case $opt in
+    i) i+=($OPTARG) ;;
+    f) f+=($OPTARG) ;;
+    t) t+=($OPTARG)    ;;
+    s) s=true       ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+
+IsUnset "$i" && Abort "must specify -i (IMEI)"
+IsUnset "$f" && Abort "must specify -f (file type)"
+IsUnset "$t" && Abort "must specify -t (timespan)"
+
+# Make these variables read-only to avoid accidental overwriting
+declare -r imeis=("${i[@]}")
+declare -r files=("${f[@]}")
+declare -r times=("${t[@]}")
+
+# One HTTP request for every timespan
+i=1
+for t in "${times[@]}"; do
+  # Verify timespan
+  d1=$(cut -d _ -f 1 <<<"$t")
+  d2=$(cut -d _ -f 2 <<<"$t")
+  # Convert date string to timestamp
+  ts1=$(Date2Ts "$d1") || Abort "invalid timespan: $t"
+  ts2=$(Date2Ts "$d2") || Abort "invalid timespan: $t"
+  [[ $ts1 -ge $ts2 ]]  && Abort "end date must be greater than start date"
+
+  # Build URL
+  url='http://trainutri.unige.ch/mQoL/v2/download/scripts/getData.php?'
+  # Trick server to always return a zip by requesting at least two files
+  url+='imeis[]=0&'
+  for imei in "${imeis[@]}"; do url+="imeis[]=$imei&";   done
+  for file in "${files[@]}"; do url+="files[]=$file&";   done
+                                url+="start=$d1&end=$d2"
+
+  # Download zip file with data files
+  zip=$(TmpFile)
+  header=$(TmpFile)
+  curl -s -g -u mqol:mqolunige "$url" -o "$zip" -D "$header"
+  [[ $? -ne 0 ]]                   && Abort "download error"
+  # Check status code of HTTP response and abort if it's not 2XX (success)
+  status=$(cat "$header" | grep "^HTTP/[0-9]" | grep -o "[1-5][0-9][0-9] .*$")
+  if ! grep -q "^2" <<<"$status"; then
+    Abort "$status\nFile(s) might be too big --> split timespan in smaller pieces"
+  fi
+
+  # Unzip the data files, exclude the "fake" file with IMEI=0
+  dir=$(TmpDir)
+  unzip -qq -d "$dir" "$zip" -x '0*'  
+
+  # File processing 1: adding missing newline and extending filename
+  for file in "$dir"/*; do
+    echo >>"$file"
+    mv "$file" $(sed "s/.csv\$/_$t.csv/" <<<"$file")
+  done
+
+  # File processing 2: adding header
+  for file in "$dir"/*; do
+    # If output to stdout and multiple -t, no headers for >= second -t 
+    IsUnset "$s" && [[ $i -gt 1 ]] && break
+    # TODO: complete handling of all file types
+    case "$file" in
+      *CellIdsService*) Prepend "$H1" "$file" ;;
+      *PingService*)    Prepend "$H2" "$file" ;;
+    esac
+    # If output to stdout, header only for first file
+    IsUnset "$s" && break
+  done
+  
+  # Output
+  IsSet   "$s" && cp  "$dir"/* .
+  IsUnset "$s" && cat "$dir"/*
+
+  i=$(($i+1))
+done

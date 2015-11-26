@@ -1,0 +1,30 @@
+#!/bin/bash
+#
+# Number of columns of CSV file
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [file ...]
+
+Description:
+ Number of rows of a CSV file. On command line, multiple files may be specified.
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+[[ $# -eq 0 ]] && input=$(TmpFile) && cat - >"$input" && CheckInput "$input"
+[[ $# -gt 0 ]] && input=("$@")
+
+for i in "${input[@]}"; do
+  cat "$i" | rm_blank | rm_comment | head -n 1 | awk -F , '{print NF}'
+done

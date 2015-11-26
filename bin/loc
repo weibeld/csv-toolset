@@ -1,0 +1,65 @@
+#!/bin/bash
+#
+# Get rows with or without a location ("lat", "lon")
+#
+# Input dependencies:
+#   Columns "lat", "lon"
+#   Colum "mcc" for the -x option
+#
+# Uses: R
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} -y|-n|-x [-o file] [file]
+
+Description:
+ Extract rows with or without values in the "lat" and "lon" column (location)
+
+Options:
+ -y Extract rows with location
+ -n Extract rows without location
+ -x Extract rows with location, but location is outside country ("mcc")
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+# Consider only first option, ignore others
+while getopts ":ynxo:" opt; do
+  case $opt in
+    y) v="${v:-y}" ;;
+    n) v="${v:-n}" ;;
+    x) v="${v:-x}" ;;
+    o) o=$OPTARG   ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+r=$(TmpFile); rout=$(TmpFile)
+cat <<EOF >"$r"
+d <- ReadCSV("$input")
+switch("$v",
+  y=WriteCSV(LocYesGet(d),     "$rout"),
+  n=WriteCSV(LocNoGet(d),      "$rout"),
+  x=WriteCSV(LocOutGet(d),     "$rout"))
+EOF
+
+MyRscript "$r"
+IsUnset "$o" && cat "$rout"
+IsSet   "$o" && cat "$rout" >"$o"
+

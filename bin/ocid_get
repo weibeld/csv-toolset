@@ -1,0 +1,52 @@
+#!/bin/bash
+#
+# Download complete OpenCellID database
+#
+# Uses: R
+# Uses: curl
+#
+# Daniel Weibel <daniel.weibel@unige.ch>, Feb. - Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [file]
+
+Description:
+ Download complete OpenCellID database (single CSV file). The data is saved to
+ the specified file or to ocid_<date>.csv in the current directory.
+
+Note:
+ Download size ~160 MB, unzipped file size ~530 MB
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+# OpenCellID API key, registered for Daniel Weibel on 12 February 2015. The
+# cell_towers.csv.gz file can be downloaded only ONCE PER DAY with this API key
+# (see http://wiki.opencellid.org/wiki/Menu_map_view#database for restrictions).
+key=e6ce0755-2c7e-460c-bcab-193a9c39924f
+
+url="http://opencellid.org/downloads/?apiKey=$key&filename=cell_towers.csv.gz"
+
+out=${1:-ocid_$(date '+%Y-%m-%d').csv}
+
+# Download
+h=$(TmpFile)
+curl -s "$url" -o "$out.gz" -D "$h" || Abort "download error"
+status=$(cat "$h" | grep "^HTTP/[0-9]" | grep -o "[1-5][0-9][0-9] .*$")
+grep -q "^2" <<<"$status" || Abort "$status"
+
+# If returned file is not gzip (but HTML), most probably download limit exceeded
+gzip -q -t "$out.gz" || { rm "$out.gz"; Abort "limit of one download per day exceeded"; }
+
+# Unzip file and adapt CSV header to our conventions
+gunzip -c "$out.gz" | sed '1 s/net/mnc/' | sed '1 s/area/lac/' | sed '1 s/cell/cid/' >"$out"
+rm "$out.gz"

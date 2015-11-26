@@ -1,0 +1,80 @@
+#!/bin/bash
+#
+# Show the available IMEIs and data file types of Ping v2. Uses the interface
+# to Ping v2 data on (*).
+# (*) http://trainutri.unige.ch/mQoL/v2/download/scripts/getData.php.
+#
+# Uses: curl
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [-i] [-f] [-I num] [-F num] [-b]
+
+Description:
+ Show the available IMEIs and file types of Ping v2
+
+Options:
+ -i Print all IMEIs
+ -f Print all file types
+ -I Print the single IMEI with number 'num'
+ -F Print the single data file with number 'num'
+ -b Suppress line numbers and annotations in the -i and -f output
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":ifI:F:b" opt; do
+  case $opt in
+    i) i=true    ;;
+    f) f=true    ;;
+    I) I=$OPTARG ;;
+    F) F=$OPTARG ;;
+    b) b=true    ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+
+# OPEN FOR EDITING: labels for IMEIs of interest in the -i output 
+label() {
+  imeis=$(echo "$imeis" | sed 's/355470061106320$/355470061106320 * (Nexus 6)/')
+  imeis=$(echo "$imeis" | sed 's/353490069536817$/353490069536817 * (Nexus 5)/')
+  imeis=$(echo "$imeis" | sed 's/358240051667814$/358240051667814 * (Sabrina)/')
+  imeis=$(echo "$imeis" | sed 's/352136063156265$/352136063156265 * (Philippines)/')
+  imeis=$(echo "$imeis" | sed 's/358240052286374$/358240052286374 * (Chile 2014-12-22 to 2015-01-02)/')
+}
+
+# Get HTML of downloader form (contains available IMEIs and file types)
+url='http://trainutri.unige.ch/mQoL/v2/download/index.php'
+html=$(curl -s -u mqol:mqolunige "$url" || Abort "could not access server")
+
+# From all <option ...>XXXXXX</option> tags, extract the XXXXXX part, because
+# these are the IMEIs and file types proposed to the user in the HTML form
+items=$(echo "$html" | tr -d '\n' | sed 's/<\/option>/\
+/g' | grep '<option' | sed 's/^.*>//g')
+
+# Divide IMEIs from file types (IMEIs consist only of numbers)
+imeis=$(grep    '^[0-9]*$' <<<"$items")
+files=$(grep -v '^[0-9]*$' <<<"$items")
+
+# Print specific IMEI or file type
+IsSet "$I" && sed -n "$I"p <<<"$imeis"
+IsSet "$F" && sed -n "$F"p <<<"$files"
+
+# Print all IMEIs (as batch output and normal output)
+IsSet "$i" && IsSet   "$b" && echo "$imeis"
+IsSet "$i" && IsUnset "$b" && label && cat -n <<<"$imeis"
+
+# Print all file types (as batch output and normal output)
+IsSet "$f" && IsSet   "$b" && echo "$files"
+IsSet "$f" && IsUnset "$b" && cat -n <<<"$files"

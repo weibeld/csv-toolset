@@ -1,0 +1,72 @@
+#!/bin/bash
+#
+# Merge two CSV files on "ts" with a certain tolerance
+#
+# Input dependencies:
+#   Column "ts" (in 'file_1' and 'file_2')
+#
+# Uses: R
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+t=5000  # Default tolerance (milliseconds)
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} -f file_2 [-c cols] [-t tolerance] [-o file] [file_1]
+
+Description:
+ Merge 'file_1' with 'file_2' on colum "ts" (left outer join). A match of two
+ rows does not have to be exact, but has a certain tolerance. For example, if
+ tolerance is 5, 230 would match with 225..235. If a row of 'file_1' has mul-
+ tiple matches in 'file_2', only the first match is included in the result.
+
+Options:
+ -f File to merge into 'file_1'
+ -c Columns of 'file_2' to include, comma separated, no spaces
+ -t Tolerance in milliseconds (default is $t)
+
+Example:
+ Merging CellIdsService file with RTTs from PingService file:
+   ${0##*/} -f ping.csv -c rtt cidservice.csv
+EOF
+}
+[[ "$1" = --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":f:c:t:o:" opt; do
+  case $opt in
+    f) f=$OPTARG ;;
+    c) c=$OPTARG ;;
+    t) t=$OPTARG ;;
+    o) o=$OPTARG ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+IsUnset "$f" && Abort "must set -f (file 2)"
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+r=$(TmpFile); rout=$(TmpFile)
+cat <<EOF >"$r"
+df1 <- ReadCSV("$input")
+df2 <- ReadCSV("$f")
+cols <- strsplit("$c", ",")[[1]]
+WriteCSV(MergeTs(df1, df2, cols, $t), "$rout")
+EOF
+
+MyRscript "$r"
+
+if IsSet "$o"; then cat "$rout" >"$o"; else cat "$rout"; fi

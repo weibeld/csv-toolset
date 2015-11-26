@@ -1,0 +1,63 @@
+#!/bin/bash
+#
+# Get the distinct values of a column of a CSV file
+#
+# Input dependencies:
+#   Any CSV file
+#
+# Uses: gawk
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+set -o pipefail
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} -c col [-n] [file]
+
+Description:
+ Get the distinct values of a column of a CSV file
+
+Options:
+ -c Column name
+ -n Sort output numerically (default is alphabetically)
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":c:n" opt; do
+  case $opt in
+    c) c=$OPTARG ;;
+    n) n=true    ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+IsUnset "$c" && Abort "must specify -c (column name)"
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+# Get index of column to print
+i=$(head -n 1 "$input" | tr , "\n" | grep -n -m 1 "^$c$" | cut -d : -f 1) || \
+Abort "column \"$c\" does not exist"
+
+gawk=$(TmpFile)
+cat <<EOF >"$gawk"
+BEGIN   {FPAT="([^,]*)|(\"[^\"]*\")"; OFS=","}
+NR == 1 {next}
+        {print \$$i}
+EOF
+
+IsUnset "$n" && gawk -f "$gawk" "$input" | sort -u
+IsSet   "$n" && gawk -f "$gawk" "$input" | sort -un

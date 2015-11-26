@@ -1,0 +1,34 @@
+#!/bin/bash
+#
+# Print first line of a CSV file
+#
+# Input dependencies:
+#   Any CSV file
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. - May 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} [file ...]
+
+Description:
+ Print first line of a CSV file. This corresponds to the header, if the CSV file
+ does not contain blank or comment lines. Multiple input files may be specified.
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+[[ $# -eq 0 ]] && input=$(TmpFile) && cat - >"$input" && CheckInput "$input"
+[[ $# -gt 0 ]] && input=("$@")
+
+for i in "${input[@]}"; do
+  head -n 1 "$i"
+done

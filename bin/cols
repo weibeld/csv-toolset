@@ -1,0 +1,99 @@
+#!/bin/bash
+#
+# Extract columns from a CSV file
+#
+# Input dependencies:
+#   Any CSV file
+#
+# Uses: gawk
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} -r|-k|-a cols [-o file] [file]
+
+Description:
+ Extract columns from a CSV file. The set of specified columns 'cols' must
+ consist of comma separated column names without spaces.
+
+Options:
+ -r Remove 'cols'
+ -k Keep 'cols', remove all the other columns
+ -a Arrange 'cols' in the specified order, remove all the other columns
+
+Examples:
+ Extract the "mcc", "mnc", "lac", and "cid" columns:
+   ${0##*/} -k mcc,mnc,lac,cid cids.csv
+ Extract all but the "rssiArr" and "rssi" columns:
+   ${0##*/} -r rssi,rssiArr ping.csv
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+while getopts ":r:k:a:o:" opt; do
+  case $opt in
+    r) cols=$OPTARG; task=remove  ;;
+    k) cols=$OPTARG; task=keep    ;;
+    a) cols=$OPTARG; task=arrange ;;
+    o) o=$OPTARG                  ;;
+    \?) Abort "invalid option: -$OPTARG"             ;;
+    :)  Abort "option -$OPTARG requires an argument" ;;
+  esac
+done
+shift $(($OPTIND - 1))
+
+[[ -n "$1" ]] && input="$1"
+[[ -z "$1" ]] && input=$(TmpFile) && cat - >"$input"
+CheckInput "$input"
+
+# Names and indices of existing columns
+declare -r n1=$(head -n 1 "$input" | tr , "\n")  # Names
+declare -r i1=$(seq 1 $(wc -l <<<"$n1"))         # Indices
+
+# Get index by name of existing columns
+i() { grep -n -m 1 "^$1\$" <<<"$n1" | cut -d : -f 1; }
+
+# Names and indices of specified columns
+declare -r n2=$(tr , "\n" <<<"$cols")  # Names (may contain invalid ones)
+for n in $n2; do                       # Indices (only indices from valid cols)
+  IsNonEmpty "$n" && i=$(i "$n") && IsNonEmpty "$i" && tmp+="$i"$'\n'
+done
+declare -r i2="${tmp%$'\n'}"
+
+# Determine which column indices to print and in which order
+case "$task" in
+  keep)
+    p=$(echo "$i2" | sort -nu) ;;
+  arrange)
+    p=$i2 ;;
+  remove)
+    p=$(comm -2 -3 <(echo "$i1" | sort) <(echo "$i2" | sort)) # Set diff i1-i2
+    p=$(sort -n <<<"$p") ;;                                   # Sort numerically
+  *)
+    p=$i1 ;;  # If no option is specified, print all columns
+esac
+
+IsEmpty "$p" && exit
+
+# Create gawk script printing only the desired columns
+gawk=$(TmpFile)
+echo -n 'BEGIN {FPAT="([^,]*)|(\"[^\"]*\")"; OFS=","} {print ' >"$gawk"
+for i in $p; do
+  f+=$(echo -n "\$$i,")
+done
+echo "${f%,}}" >>"$gawk"
+
+if IsSet "$o"; then
+  t=$(TmpFile); gawk -f "$gawk" "$input" >"$t"; mv "$t" "$o"
+else
+  gawk -f "$gawk" "$input"
+fi

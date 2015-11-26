@@ -1,0 +1,35 @@
+#!/bin/bash
+#
+# Relation of the number of rows of two CSV files in percent
+#
+# Daniel Weibel <daniel.weibel@unifr.ch> Mar. 2015
+#------------------------------------------------------------------------------#
+
+set -e
+set -o pipefail
+
+usage() {
+cat <<EOF
+Usage:
+ ${0##*/} file file
+
+Description:
+ Number of rows of 1st CSV file to number of rows of 2nd CSV file in percent
+EOF
+}
+[[ "$1" == --help ]] && usage && exit
+
+# Source common functions
+dir() { local w=$(which ${0##*/}); dirname "${w:-$0}"; }
+source "$(dir)/../lib/commons.sh"
+
+IsUnset "$2" && Abort "must specify two CSV files"
+
+# Allow script to exit if $1 or $2 don't exist (pipefail)
+n1=$(cat "$1" | wc -l)
+n2=$(cat "$2" | wc -l)
+
+n1=$(($n1-1))
+n2=$(($n2-1))
+
+bc <<<"scale=2; $n1*100/$n2"
