@@ -1,34 +1,26 @@
----
-title:  Ping v2 CSV Analysis and Manipulation Toolset
-author: Daniel Weibel
-date:   29 March 2015
----
+# CSV Analysis and Manipulation Toolset 
 
+*This is a preliminary documentation, presenting some features of the current state of the toolset. The work is in progress.*
 
-Introduction
-============
+## Introduction
 
-***Note:** this is a preliminary documentation, presenting some features of the current state of the toolset. The work is in progress.*
-
-The Ping v2 CSV Analysis and Manipulation Toolset currently consists of 21 shell programs in directory `bin` (see listing in Section [Shell Programs](#shellprogs)), and a file with R functions `lib/toolbox.r`.
+The Ping v2 CSV Analysis and Manipulation Toolset currently consists of 21 shell programs in directory `bin` (see listing in Section [Shell Programs](#shell-programs)), and a file with R functions `lib/toolbox.r`.
 
 The purpose of the toolset is to provide flexible and generic building blocks that can be composed to answer any specific questions about the Ping data. This contrasts with the approach of repeatedly tailoring code and tools from scratch for every specific question (e.g. RTT values on train lines). With the toolset, many different questions about the data can be investigated with very little effort, and the users can concentrate on the actual analysis of the data rather than on technical details of script writing.
 
 The shell programs are used from the shell, and most take as input a CSV file, do some transformation on it (e.g. cleaning), and output the transformed CSV file. The R functions serve a double role. One one hand, they are used by the shell programs and serve as a library to them. On the other hand, they can be directly used by the user, for example, interactively in the R console, or in R scripts.
 
 
-Compatibility
-=============
+## Compatibility
 
 The toolset has been designed to run out-of-the box on Mac OS X and Linux. So far, it has been tested on Mac OS X and Debian 7. Further compatibility tests (especially on other Linux versions) are to be done in the future.
 
 
-Installation
-============
+## Installation
 
 The toolset is self-contained, and it is installed by simply copying the root directory to the local machine.
 
-However, there are some dependencies on third-party software that must be installed on the local machine. These dependencies are explained in Section [Dependencies](#deps).
+However, there are some dependencies on third-party software that must be installed on the local machine. These dependencies are explained in Section [Dependencies](#dependencies).
 
 For convenience, the `bin` directory can be added to the `PATH`^[Make sure to add the `bin` directory to the beginning of the `PATH` variable to prevent that a command of the toolset is shadowed by an existing shell command. You can always test if any command is shadowed in the `PATH` with `which -a <cmd>`.], for example:
 
@@ -37,8 +29,7 @@ echo 'PATH=/Users/dw/Desktop/csv/bin:$PATH' >>~/.bash_profile
 ~~~
 
 
-Tutorial
-========
+## Tutorial
 
 This is a short step-by-step tutorial that demonstrates the most important of the currently implemented features of the shell programs. Note that you can type `cmd --help` for any command for getting information about what the command does and how it is used.
 
@@ -127,8 +118,7 @@ loc -y cid_loc.csv | kml -n "Nexus 6" -s "March 2015" >cid.kml
 ~~~
 
 
-Conventions and Design Principles
-=================================
+## Conventions and Design Principles
 
 The shell programs have been designed with some consistent features and concepts in mind that should facilitate their understanding and usage.
 
@@ -141,112 +131,106 @@ This design implies that all commands print only relevant data to stdout (i.e. t
 However, for every program the reading of the input can be switched to a file which has to be specified as the last argument on the command line. Similarly, in many commands the output can be redirected to a file with the `-o` option. This allows for in-place transformations, that is, the saving of the output of a command back to the input file (note that redirecting the output of a command to the input file with `>` would empty the input file before it is read).
 
 
-Shell Programs {#shellprogs}
-==============
+## Shell Programs
 
 Current state (29 March 2015).
 
-Program        Purpose
----------      -------- 
-add            Add columns
-b              Print body
-clean          Remove rows with invalid cells
-cols           Extract columns
-distinct       Extract the rows with distinct cells
-get            Download Ping v2 CSV files
-h              Print header
-kml            Create KML file with point placemarks for viewing in Google Earth
-loc            Extract rows with or without a location
-mrgcell        Merge two CSV files by their cell fields
-mrgts          Merge two CSV files by their timestamps 
-nc             Print number of columns
-nr             Print number of rows
-ocid_clean     Remove rows with duplicated cells from an OpenCellID file
-ocid_extract   Extract rows from an OpenCellID file
-ocid_get       Download the complete OpenCellID database
-openr          Open a file in R for further analysis
-order          Order rows by cells
-peek           Print available IMEIs and data files of Ping v2
-prc            Calculate relation of sizes of two files in percent
-rows           Extract rows
+Program     |   Purpose
+---------   |   -------- 
+`add`           | Add columns
+`b`             | Print body
+`clean`         | Remove rows with invalid cells
+`cols`          | Extract columns
+`distinct`      | Extract the rows with distinct cells
+`get`           | Download Ping v2 CSV files
+`h`             | Print header
+`kml`           | Create KML file with point placemarks for viewing in Google Earth
+`loc`           | Extract rows with or without a location
+`mrgcell`       | Merge two CSV files by their cell fields
+`mrgts`         | Merge two CSV files by their timestamps 
+`nc`            | Print number of columns
+`nr`            | Print number of rows
+`ocid_clean`    | Remove rows with duplicated cells from an OpenCellID file
+`ocid_extract`  | Extract rows from an OpenCellID file
+`ocid_get`      | Download the complete OpenCellID database
+`openr`         | Open a file in R for further analysis
+`order`         | Order rows by cells
+`peek`          | Print available IMEIs and data files of Ping v2
+`prc`           | Calculate relation of sizes of two files in percent
+`rows`          | Extract rows
 
 
-Dependencies {#deps}
-============
+## Dependencies
 
 The toolset requires that certain non-standard software is installed on the system. In the following, we list these dependencies and give for each one installation instructions for Mac OS X and Linux.
 
 Note that our proposed way of installing software is APT for Linux and Homebrew for Mac OS X. While APT is installed by default in many Linux versions, Homebrew is not installed on Mac OS X, but can be installed very easily as explained at the end of this section.
 
-R
--
+### R
 
 The backbone tool for the whole toolset.
 
-### Test if installed
+#### Test if installed
 
 ~~~bash
 R --version
 ~~~
 
-### Install on Linux
+#### Install on Linux
 ~~~bash
 sudo apt-get install r-base
 ~~~
 
-### Install on Mac OS X
+#### Install on Mac OS X
 
 ~~~bash
 brew install r
 ~~~
 
-gawk
-----
+### gawk
 
 GNU awk. Used to handle quoted CSV fields. Note that the standard awk is not sufficient, it must be gawk.
 
-### Test if installed
+#### Test if installed
 ~~~bash
 gawk --version
 ~~~
 
-### Install on Linux
+#### Install on Linux
 
 ~~~bash
 sudo apt-get install gawk
 ~~~
 
-### Install on Mac OS X
+#### Install on Mac OS X
 
 ~~~bash
 brew install gawk
 ~~~
 
-curl
-----
+### curl
 
 Used to download files over HTTP.
 
-### Test if installed
+#### Test if installed
 
 ~~~bash
 curl --version
 ~~~
 
-### Install on Linux
+#### Install on Linux
 
 ~~~bash
 sudo apt-get install curl
 ~~~
 
-### Install on Mac OS X
+#### Install on Mac OS X
 
 ~~~bash
 brew install curl
 ~~~
 
-Install Homebrew on Mac OS X
-----------------------------
+### Install Homebrew on Mac OS X
 
 Homebrew is an easy-to-use package manager for Mac OS X, see <http://brew.sh> for more information. It can be installed simply with:
 
